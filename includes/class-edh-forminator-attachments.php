@@ -100,7 +100,7 @@ class EDH_Forminator_Attachments
             'edh-forminator-attachments-admin',
             EDH_FORMINATOR_ATTACHMENTS_URL . 'assets/js/admin.js',
             array('jquery'),
-            '1.1.1',
+            '1.1.3',
             true
         );
         wp_localize_script('edh-forminator-attachments-admin', 'edhForminatorAttachments', array(
@@ -254,10 +254,12 @@ class EDH_Forminator_Attachments
 
         foreach (array_values($notifications) as $index => $notification) {
             $notification = (array) $notification;
-            $name = !empty($notification['name'])
-                ? $notification['name']
-                /* translators: %d: notification position within the form */
-                : sprintf(__('Notification %d', 'edh-file-attachment-for-forminator'), $index + 1);
+            $name = !empty($notification['label'])
+                ? $notification['label']
+                : (!empty($notification['name'])
+                    ? $notification['name']
+                    /* translators: %d: notification position within the form */
+                    : sprintf(__('Notification %d', 'edh-file-attachment-for-forminator'), $index + 1));
 
             foreach ($this->resolve_notification_recipients($notification) as $recipient) {
                 $address = strtolower(trim($recipient['address']));
@@ -281,8 +283,9 @@ class EDH_Forminator_Attachments
                     );
 
                 $options[] = array(
-                    'value' => $address,
-                    'label' => $label,
+                    'value'   => $address,
+                    'label'   => $label,
+                    'dynamic' => $recipient['dynamic'],
                 );
             }
         }
@@ -290,18 +293,34 @@ class EDH_Forminator_Attachments
         return $options;
     }
 
+    /**
+     * Resolve a notification's recipient(s).
+     *
+     * On the Forminator installs this has been tested against, the actual
+     * recipient lives in `recipients` — either a literal email address
+     * (including when it's just the resolved default admin email), or a
+     * merge tag like "{email-1}" when the notification sends to whatever
+     * address was entered into a form field. `email-recipients` has been
+     * observed holding a type marker (e.g. "default") rather than an
+     * address, but is still checked as a fallback for installs/configs
+     * where it holds a literal address instead.
+     */
     private function resolve_notification_recipients(array $notification)
     {
-        $recipients_type = isset($notification['recipients']) ? $notification['recipients'] : '';
+        $recipients = isset($notification['recipients']) ? trim((string) $notification['recipients']) : '';
 
-        if (in_array($recipients_type, array('', 'default', 'admin_email'), true)) {
+        if (is_email($recipients)) {
+            return array(array('address' => $recipients, 'dynamic' => false));
+        }
+
+        if (in_array($recipients, array('', 'default', 'admin_email'), true)) {
             return array(array(
                 'address' => get_option('admin_email'),
                 'dynamic' => false,
             ));
         }
 
-        if (!empty($notification['email-recipients'])) {
+        if (!empty($notification['email-recipients']) && false !== strpos($notification['email-recipients'], '@')) {
             $out = array();
             foreach (explode(',', $notification['email-recipients']) as $address) {
                 $address = trim($address);
@@ -318,11 +337,9 @@ class EDH_Forminator_Attachments
             }
         }
 
-        if (is_email($recipients_type)) {
-            return array(array('address' => $recipients_type, 'dynamic' => false));
-        }
-
-        return array(array('address' => $recipients_type, 'dynamic' => true));
+        // Anything else (e.g. a "{field-slug}" merge tag) is resolved
+        // per-submission from a form field — there's no fixed address.
+        return array(array('address' => $recipients, 'dynamic' => true));
     }
 
     /* ------------------------------------------------------------------ */
@@ -339,6 +356,7 @@ class EDH_Forminator_Attachments
         $form_id = isset($_POST['form_id']) ? absint($_POST['form_id']) : 0;
         $recipient = isset($_POST['recipient']) ? strtolower(sanitize_text_field(wp_unslash($_POST['recipient']))) : '';
         $rule_id = isset($_POST['rule_id']) ? sanitize_text_field(wp_unslash($_POST['rule_id'])) : '';
+        $is_dynamic = !empty($_POST['recipient_dynamic']);
 
         $attachment_ids = array();
         if (!empty($_POST['attachment_ids'])) {
@@ -362,6 +380,7 @@ class EDH_Forminator_Attachments
             'id'             => $rule_id ? $rule_id : uniqid('r', true),
             'form_id'        => $form_id,
             'recipient'      => $recipient,
+            'dynamic'        => $is_dynamic,
             'attachment_ids' => array_values(array_unique($attachment_ids)),
         );
 
@@ -405,15 +424,34 @@ class EDH_Forminator_Attachments
     }
 
     /* ------------------------------------------------------------------ */
+    /* Debug logging (only active when WP_DEBUG is enabled)               */
+    /* ------------------------------------------------------------------ */
+
+    private function log($message)
+    {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[EDH Forminator Attachments] ' . $message); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- intentional, gated behind WP_DEBUG.
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Mail filters                                                       */
     /* ------------------------------------------------------------------ */
 
     public function tag_headers_with_form_id($headers, $custom_form, $data, $entry, $cls)
     {
         $form_id = isset($custom_form->id) ? (int) $custom_form->id : 0;
+        $has_rules = $form_id && $this->form_has_rules($form_id);
 
-        if ($form_id && $this->form_has_rules($form_id)) {
+        $this->log(sprintf(
+            'forminator_custom_form_mail_admin_headers fired for form #%d — has saved rule(s): %s',
+            $form_id,
+            $has_rules ? 'yes' : 'no'
+        ));
+
+        if ($has_rules) {
             $headers[] = self::HEADER_NAME . ': ' . $form_id;
+            $this->log(sprintf('Tagged headers for form #%d with %s', $form_id, self::HEADER_NAME));
         }
 
         return $headers;
@@ -432,33 +470,88 @@ class EDH_Forminator_Attachments
     public function attach_configured_files($args)
     {
         if (empty($args['headers'])) {
+            $this->log('wp_mail fired with no headers at all; cannot be a tagged Forminator notification, skipping.');
             return $args;
         }
 
         $form_id = $this->extract_form_id_from_headers($args['headers']);
         if (!$form_id) {
+            $this->log('wp_mail fired but no ' . self::HEADER_NAME . ' header was found; either this isn\'t a Forminator notification, or tag_headers_with_form_id() didn\'t tag it (check the log line above for "has saved rule(s)").');
             return $args;
         }
 
         $recipients = $this->normalize_recipients(isset($args['to']) ? $args['to'] : '');
+        $this->log(sprintf(
+            'wp_mail tagged for form #%d, resolved recipient(s): %s',
+            $form_id,
+            $recipients ? implode(', ', $recipients) : '(none)'
+        ));
+
         if (empty($recipients)) {
+            $this->log('No recipients could be resolved from $args[\'to\']; skipping.');
             return $args;
         }
 
-        $attachment_ids = array();
+        $rules_for_form = array();
         foreach ($this->get_rules() as $rule) {
-            if ((int) $rule['form_id'] !== $form_id) {
+            if ((int) $rule['form_id'] === $form_id) {
+                $rules_for_form[] = $rule;
+            }
+        }
+
+        // Specific (literal-address) rules take precedence: a rule only
+        // matches this particular send if its configured recipient is one
+        // of the addresses this email is actually going to.
+        $attachment_ids = array();
+        $matched_specific = false;
+        foreach ($rules_for_form as $rule) {
+            if (!empty($rule['dynamic'])) {
                 continue;
             }
             if (!in_array($rule['recipient'], $recipients, true)) {
+                $this->log(sprintf(
+                    'Rule recipient "%s" does not match resolved recipient(s) (%s) for form #%d.',
+                    $rule['recipient'],
+                    implode(', ', $recipients),
+                    $form_id
+                ));
                 continue;
             }
+            $matched_specific = true;
             foreach ($rule['attachment_ids'] as $id) {
                 $attachment_ids[] = (int) $id;
             }
         }
 
+        // Dynamic rules (recipient set from a form field, e.g. "{email-1}")
+        // can never be matched by literal address — there's no way to know
+        // it ahead of time. They're used as a fallback only when no
+        // specific rule already claimed this particular send, so a
+        // form's admin-notification rule and its dynamic client-notification
+        // rule don't both fire on the same email.
+        if (!$matched_specific) {
+            foreach ($rules_for_form as $rule) {
+                if (empty($rule['dynamic'])) {
+                    continue;
+                }
+                $this->log(sprintf(
+                    'No specific rule matched; applying dynamic rule "%s" as fallback for form #%d.',
+                    $rule['recipient'],
+                    $form_id
+                ));
+                foreach ($rule['attachment_ids'] as $id) {
+                    $attachment_ids[] = (int) $id;
+                }
+            }
+        }
+
         if (empty($attachment_ids)) {
+            $this->log(sprintf(
+                'No matching rule produced any attachment IDs for form #%d / recipient(s) %s (%d saved rule(s) exist for this form).',
+                $form_id,
+                implode(', ', $recipients),
+                count($rules_for_form)
+            ));
             return $args;
         }
 
@@ -467,12 +560,24 @@ class EDH_Forminator_Attachments
             $attachments = is_array($args['attachments']) ? $args['attachments'] : array($args['attachments']);
         }
 
+        $added = array();
         foreach (array_unique($attachment_ids) as $id) {
             $path = get_attached_file($id);
             if ($path && file_exists($path)) {
                 $attachments[] = $path;
+                $added[] = $path;
+            } else {
+                $this->log(sprintf('Attachment #%d resolved to a missing/invalid file path ("%s"); skipped.', $id, $path ? $path : '(empty)'));
             }
         }
+
+        $this->log(sprintf(
+            'Attached %d file(s) to the form #%d notification for %s: %s',
+            count($added),
+            $form_id,
+            implode(', ', $recipients),
+            $added ? implode(', ', $added) : '(none)'
+        ));
 
         $args['attachments'] = $attachments;
 

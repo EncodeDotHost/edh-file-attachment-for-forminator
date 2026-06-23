@@ -24,6 +24,11 @@
         $('#edh-attachment-ids').val(Object.keys(selectedAttachments).join(','));
     }
 
+    function updateDynamicFlag() {
+        var $selected = $('#edh-recipient-select option:selected');
+        $('#edh-recipient-dynamic').val($selected.data('dynamic') ? '1' : '0');
+    }
+
     function loadNotifications(formId, preselectRecipient) {
         var $select = $('#edh-recipient-select');
         $select.prop('disabled', true).empty();
@@ -32,6 +37,7 @@
         if (!formId) {
             $select.empty().append($('<option/>').val('').text(settings.i18n.selectForm));
             $select.prop('disabled', false);
+            updateDynamicFlag();
             return;
         }
 
@@ -45,6 +51,7 @@
             if (!response.success || !response.data.options || !response.data.options.length) {
                 $select.append($('<option/>').val('').text(settings.i18n.noEmails));
                 $select.prop('disabled', false);
+                updateDynamicFlag();
                 return;
             }
 
@@ -52,6 +59,7 @@
 
             $.each(response.data.options, function (i, option) {
                 var $option = $('<option/>').val(option.value).text(option.label);
+                $option.data('dynamic', !!option.dynamic);
                 if (preselectRecipient && option.value === preselectRecipient) {
                     $option.prop('selected', true);
                 }
@@ -59,9 +67,11 @@
             });
 
             $select.prop('disabled', false);
+            updateDynamicFlag();
         }).fail(function () {
             $select.empty().append($('<option/>').val('').text(settings.i18n.noEmails));
             $select.prop('disabled', false);
+            updateDynamicFlag();
         });
     }
 
@@ -89,6 +99,8 @@
             loadNotifications($(this).val(), editRecipient);
             editRecipient = '';
         });
+
+        $('#edh-recipient-select').on('change', updateDynamicFlag);
 
         if ($('#edh-form-select').val()) {
             loadNotifications($('#edh-form-select').val(), editRecipient);

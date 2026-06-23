@@ -60,7 +60,12 @@ if ($edit_rule) {
                 <?php foreach ($rules as $rule) : ?>
                     <tr>
                         <td><?php echo esc_html($this->get_form_name_by_id($rule['form_id'])); ?> (#<?php echo (int) $rule['form_id']; ?>)</td>
-                        <td><?php echo esc_html($rule['recipient']); ?></td>
+                        <td>
+                            <?php echo esc_html($rule['recipient']); ?>
+                            <?php if (!empty($rule['dynamic'])) : ?>
+                                <em>(<?php esc_html_e('dynamic, set from form field', 'edh-file-attachment-for-forminator'); ?>)</em>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php
                             $names = array();
@@ -96,6 +101,7 @@ if ($edit_rule) {
         action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
         id="edh-attachment-rule-form"
         data-edit-recipient="<?php echo esc_attr($edit_rule ? $edit_rule['recipient'] : ''); ?>"
+        data-edit-recipient-dynamic="<?php echo esc_attr($edit_rule && !empty($edit_rule['dynamic']) ? '1' : '0'); ?>"
         data-edit-attachment-ids="<?php echo esc_attr($edit_rule ? implode(',', $edit_rule['attachment_ids']) : ''); ?>"
         data-edit-attachment-names="<?php echo esc_attr(wp_json_encode($edit_attachment_names)); ?>"
     >
@@ -123,6 +129,7 @@ if ($edit_rule) {
                     <select id="edh-recipient-select" name="recipient" required>
                         <option value=""><?php esc_html_e('Select a form first…', 'edh-file-attachment-for-forminator'); ?></option>
                     </select>
+                    <input type="hidden" name="recipient_dynamic" id="edh-recipient-dynamic" value="<?php echo esc_attr($edit_rule && !empty($edit_rule['dynamic']) ? '1' : '0'); ?>" />
                     <p class="description"><?php esc_html_e('The emails configured for this form\'s notifications.', 'edh-file-attachment-for-forminator'); ?></p>
                 </td>
             </tr>

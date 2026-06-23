@@ -4,7 +4,7 @@ Tags: forminator, attachments, email, forms, media library
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.1.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -39,6 +39,13 @@ If Forminator isn't installed/active, the plugin shows an admin notice and other
 4. Go to Settings → Forminator Attachments to configure rules.
 
 == Changelog ==
+
+= 1.1.3 =
+* Fixed recipient resolution to match this Forminator install's actual notification data: the literal address (or merge tag, for dynamic recipients) lives in `recipients`, and the notification's display name is `label`, not `email-recipients`/`name` as previously assumed.
+
+= 1.1.2 =
+* Added support for dynamic (form-field-based) notification recipients: matching now tries literal-address rules first, falling back to a dynamic rule only when no literal rule matches a given send, so an admin-notification rule and a dynamic client-notification rule on the same form no longer both fire on every email.
+* Added debug logging through the mail-attachment pipeline, active only when `WP_DEBUG` is enabled.
 
 = 1.1.1 =
 * Fixed missing translators comments and unsanitized nonce input flagged by Plugin Check/PHPCS.
