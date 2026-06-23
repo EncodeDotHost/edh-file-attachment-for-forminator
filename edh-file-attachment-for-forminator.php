@@ -5,7 +5,7 @@
  * Author URI:      https://encode.host
  * Text Domain:     edh-file-attachment-for-forminator
  * Domain Path:     /languages
- * Version:         1.0.0
+ * Version:         1.1.0
  *
  * @package         EDH_Forminator_Attachments
  */

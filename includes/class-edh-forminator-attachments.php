@@ -37,6 +37,16 @@ class EDH_Forminator_Attachments
 
         add_filter('forminator_custom_form_mail_admin_headers', array($this, 'tag_headers_with_form_id'), 10, 5);
         add_filter('wp_mail', array($this, 'attach_configured_files'), 10, 1);
+
+        add_filter('plugin_action_links_' . plugin_basename(EDH_FORMINATOR_ATTACHMENTS_FILE), array($this, 'add_settings_link'));
+    }
+
+    public function add_settings_link($links)
+    {
+        $url = admin_url('options-general.php?page=' . self::PAGE_SLUG);
+        $settings_link = '<a href="' . esc_url($url) . '">' . esc_html__('Settings', 'edh-file-attachment-for-forminator') . '</a>';
+        array_unshift($links, $settings_link);
+        return $links;
     }
 
     /* ------------------------------------------------------------------ */
@@ -90,7 +100,7 @@ class EDH_Forminator_Attachments
             'edh-forminator-attachments-admin',
             EDH_FORMINATOR_ATTACHMENTS_URL . 'assets/js/admin.js',
             array('jquery'),
-            '1.0.0',
+            '1.1.0',
             true
         );
         wp_localize_script('edh-forminator-attachments-admin', 'edhForminatorAttachments', array(
@@ -242,7 +252,9 @@ class EDH_Forminator_Attachments
 
         foreach (array_values($notifications) as $index => $notification) {
             $notification = (array) $notification;
-            $position = $index + 1;
+            $name = !empty($notification['name'])
+                ? $notification['name']
+                : sprintf(__('Notification %d', 'edh-file-attachment-for-forminator'), $index + 1);
 
             foreach ($this->resolve_notification_recipients($notification) as $recipient) {
                 $address = strtolower(trim($recipient['address']));
@@ -253,15 +265,15 @@ class EDH_Forminator_Attachments
 
                 $label = $recipient['dynamic']
                     ? sprintf(
-                        /* translators: 1: notification position, 2: raw recipient value */
-                        __('Notification %1$d — %2$s (dynamic, set from form field)', 'edh-file-attachment-for-forminator'),
-                        $position,
+                        /* translators: 1: notification name, 2: raw recipient value */
+                        __('%1$s — %2$s (dynamic, set from form field)', 'edh-file-attachment-for-forminator'),
+                        $name,
                         $recipient['address']
                     )
                     : sprintf(
-                        /* translators: 1: notification position, 2: recipient email address */
-                        __('Notification %1$d — %2$s', 'edh-file-attachment-for-forminator'),
-                        $position,
+                        /* translators: 1: notification name, 2: recipient email address */
+                        __('%1$s — %2$s', 'edh-file-attachment-for-forminator'),
+                        $name,
                         $address
                     );
 
@@ -279,7 +291,7 @@ class EDH_Forminator_Attachments
     {
         $recipients_type = isset($notification['recipients']) ? $notification['recipients'] : '';
 
-        if ('' === $recipients_type || 'admin_email' === $recipients_type) {
+        if (in_array($recipients_type, array('', 'default', 'admin_email'), true)) {
             return array(array(
                 'address' => get_option('admin_email'),
                 'dynamic' => false,
