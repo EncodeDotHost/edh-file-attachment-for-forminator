@@ -2,6 +2,7 @@
 /**
  * Plugin Name:     EDH File Attachments for Forminator
  * Description:     Configure Media Library file attachments for Forminator form notification emails from a settings page.
+ * Author:          EncodeDotHost
  * Author URI:      https://encode.host
  * Text Domain:     edh-file-attachment-for-forminator
  * Domain Path:     /languages
