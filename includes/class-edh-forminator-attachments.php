@@ -100,7 +100,7 @@ class EDH_Forminator_Attachments
             'edh-forminator-attachments-admin',
             EDH_FORMINATOR_ATTACHMENTS_URL . 'assets/js/admin.js',
             array('jquery'),
-            '1.1.0',
+            '1.1.1',
             true
         );
         wp_localize_script('edh-forminator-attachments-admin', 'edhForminatorAttachments', array(
@@ -128,7 +128,7 @@ class EDH_Forminator_Attachments
         $forms = $this->get_form_choices();
         $edit_rule = null;
 
-        if (isset($_GET['edit']) && isset($_GET['_wpnonce']) && wp_verify_nonce(wp_unslash($_GET['_wpnonce']), self::NONCE_ACTION)) {
+        if (isset($_GET['edit']) && isset($_GET['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::NONCE_ACTION)) {
             $edit_rule = $this->find_rule(sanitize_text_field(wp_unslash($_GET['edit'])));
         }
 
@@ -166,6 +166,7 @@ class EDH_Forminator_Attachments
         if (isset($form->name) && '' !== $form->name) {
             return $form->name;
         }
+        /* translators: %d: form ID */
         return sprintf(__('Form #%d', 'edh-file-attachment-for-forminator'), (int) $form->id);
     }
 
@@ -178,6 +179,7 @@ class EDH_Forminator_Attachments
             return $cache[$form_id];
         }
 
+        /* translators: %d: form ID */
         $name = sprintf(__('Form #%d', 'edh-file-attachment-for-forminator'), $form_id);
 
         if (class_exists('Forminator_API') && method_exists('Forminator_API', 'get_form')) {
@@ -254,6 +256,7 @@ class EDH_Forminator_Attachments
             $notification = (array) $notification;
             $name = !empty($notification['name'])
                 ? $notification['name']
+                /* translators: %d: notification position within the form */
                 : sprintf(__('Notification %d', 'edh-file-attachment-for-forminator'), $index + 1);
 
             foreach ($this->resolve_notification_recipients($notification) as $recipient) {

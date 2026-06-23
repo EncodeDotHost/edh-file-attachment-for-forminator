@@ -4,6 +4,8 @@
  *
  * Expects $rules, $forms, $edit_rule and $this (EDH_Forminator_Attachments) in scope.
  *
+ * phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- local vars in an included view template, not real globals.
+ *
  * @package EDH_Forminator_Attachments
  */
 
@@ -11,6 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display flag, no state change.
 $message = isset($_GET['edh_message']) ? sanitize_key(wp_unslash($_GET['edh_message'])) : '';
 
 $edit_attachment_names = array();

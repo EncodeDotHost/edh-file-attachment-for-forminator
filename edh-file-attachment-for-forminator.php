@@ -5,7 +5,9 @@
  * Author URI:      https://encode.host
  * Text Domain:     edh-file-attachment-for-forminator
  * Domain Path:     /languages
- * Version:         1.1.0
+ * Version:         1.1.1
+ * License:         GPLv3
+ * License URI:     https://www.gnu.org/licenses/gpl-3.0.html
  *
  * @package         EDH_Forminator_Attachments
  */
